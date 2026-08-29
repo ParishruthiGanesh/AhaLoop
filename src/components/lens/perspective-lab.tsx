@@ -28,7 +28,11 @@ export function PerspectiveLab({
   misconception: string;
 }) {
   const [set, setSet] = useState<
-    (PerspectiveSet & { llmAttempted?: boolean }) | null
+    (PerspectiveSet & {
+      llmAttempted?: boolean;
+      providerError?: string | null;
+    })
+    | null
   >(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -80,7 +84,7 @@ export function PerspectiveLab({
             title="No perspectives for this topic yet"
             description={
               set.llmAttempted
-                ? "A model is configured, but the request to it failed, so this fell back to the built-in personas — and they only speak about this build's sample lesson. Check the terminal running the server; the usual causes are an exhausted credit balance or a revoked key."
+                ? `A model is configured, but the request to it failed, so this fell back to the built-in personas — and they only speak about this build's sample lesson.${set.providerError ? ` The provider said: "${set.providerError}"` : ""}`
                 : "The built-in personas only speak about this build's sample lesson — accuracy, precision, recall and class imbalance. Add ANTHROPIC_API_KEY or OPENAI_API_KEY to .env.local and they will be generated for any concept."
             }
           />

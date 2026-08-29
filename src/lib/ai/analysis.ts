@@ -9,7 +9,11 @@ import {
   evaluateTeachBack,
   DEMO_TRANSLATIONS,
 } from "./demo-analyzer";
-import { generateStructured, type JsonSchema } from "./llm";
+import {
+  generateStructured,
+  getLastProviderError,
+  type JsonSchema,
+} from "./llm";
 import { isLlmConfigured } from "../config";
 import { buildErrorTwin } from "./demo-analyzer";
 import { MISCONCEPTIONS } from "../lesson";
@@ -440,7 +444,20 @@ Diagnose the belief behind this reasoning.
 If the reasoning is actually correct, say so in misconception and set confidence accordingly.`,
   });
 
-  if (!raw) return { ...demo, generatedBy: "demo" };
+  if (!raw) {
+    // Rebuild with the provider's error so the screen names the real cause.
+    return {
+      ...buildDiagnosis({
+        reasoning: args.reasoning,
+        selectedOptionId: args.selectedOptionId,
+        correctOptionId: args.correctOptionId,
+        concept: args.concept,
+        llmAttempted: isLlmConfigured,
+        providerError: getLastProviderError(),
+      }),
+      generatedBy: "demo",
+    };
+  }
 
   const prerequisites = raw.missingPrerequisites
     .map((p) => p.toLowerCase().trim())
@@ -603,7 +620,10 @@ Language: ${isEnglish ? "English" : lang}${
   const unavailable =
     !isEnglish && !DEMO_TRANSLATIONS[lang.toLowerCase()];
 
-  return { ...demo, languageUnavailable: unavailable };
+  return {
+    ...buildExplanation(req, isLlmConfigured, getLastProviderError()),
+    languageUnavailable: unavailable,
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -657,7 +677,9 @@ function isRawPerspectives(v: unknown): v is RawPerspectives {
 export async function perspectives(
   concept: string,
   misconception: string,
-): Promise<PerspectiveSet & { llmAttempted: boolean }> {
+): Promise<
+  PerspectiveSet & { llmAttempted: boolean; providerError?: string | null }
+> {
   const demo = buildPerspectives(concept);
 
   const raw = await generateStructured<RawPerspectives>({
@@ -673,7 +695,13 @@ Give five explanations of the same concept from genuinely different vantage poin
 Each perspective: persona (a job title), domain, glyph (one emoji), headline (one vivid first-person sentence), body (3-5 sentences in that person's voice, addressing the misconception from inside their work). Do not repeat the same example across perspectives.`,
   });
 
-  if (!raw) return { ...demo, llmAttempted: isLlmConfigured };
+  if (!raw) {
+    return {
+      ...demo,
+      llmAttempted: isLlmConfigured,
+      providerError: getLastProviderError(),
+    };
+  }
 
   return {
     llmAttempted: isLlmConfigured,
@@ -755,13 +783,6 @@ export async function assessTeachBack(args: {
   concept: string;
   misconception: string;
 }): Promise<TeachBackEvaluation> {
-  const demo = evaluateTeachBack(
-    args.text,
-    args.misconception,
-    args.concept,
-    isLlmConfigured,
-  );
-
   const raw = await generateStructured<RawTeachBack>({
     system: TEACHING_SYSTEM,
     schemaName: "teachback_evaluation",
@@ -783,7 +804,15 @@ Judge whether the original misconception is actually gone.
 - nextStep: one concrete action.`,
   });
 
-  if (!raw) return demo;
+  if (!raw) {
+    return evaluateTeachBack(
+      args.text,
+      args.misconception,
+      args.concept,
+      isLlmConfigured,
+      getLastProviderError(),
+    );
+  }
 
   let masteryState: MasteryState;
   if (raw.misconceptionStillPresent) masteryState = "red";

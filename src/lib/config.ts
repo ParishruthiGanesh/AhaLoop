@@ -40,7 +40,15 @@ export const openaiBaseUrl =
   "https://api.openai.com";
 
 export const anthropicModel =
-  process.env.ANTHROPIC_MODEL?.trim() || "claude-sonnet-4-5";
+  process.env.ANTHROPIC_MODEL?.trim() || "claude-opus-5";
+
+/**
+ * How hard the model works per request. ThinkTrace is interactive — a student
+ * is watching a spinner — so this trades some depth for a response that
+ * arrives while they are still looking at the screen. Raise to "high" if you
+ * care more about the analysis than the wait.
+ */
+export const anthropicEffort = process.env.ANTHROPIC_EFFORT?.trim() || "medium";
 export const openaiModel = process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini";
 
 export interface ModeInfo {

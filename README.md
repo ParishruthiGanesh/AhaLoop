@@ -123,8 +123,9 @@ cp .env.example .env.local
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Real accounts, persistence and Realtime responses |
 | `ANTHROPIC_API_KEY` **or** `OPENAI_API_KEY` | Live misconception analysis instead of the demo analyzer |
-| `ANTHROPIC_MODEL` / `OPENAI_MODEL` | Override the default model |
-| `LLM_TIMEOUT_MS` | Abort a slow analysis call and fall back (default 45000) |
+| `ANTHROPIC_MODEL` / `OPENAI_MODEL` | Override the default model (Claude Opus 5) |
+| `ANTHROPIC_EFFORT` | `low`…`max`; default `medium`, tuned for interactive latency |
+| `LLM_TIMEOUT_MS` | Abort a slow analysis call and fall back (default 60000) |
 
 Model keys are read in a single `server-only` module and never reach the
 browser. The Supabase keys are public by design — the anon key is protected by
@@ -278,8 +279,12 @@ npm run typecheck  # tsc --noEmit
 ## Tech stack
 
 Next.js 15 (App Router) · React 19 · TypeScript (strict) · Tailwind CSS v4 ·
-Supabase (Auth, Postgres, Realtime) · Anthropic or OpenAI with structured JSON
-output. No UI component library — the primitives in `components/ui.tsx` are
+Supabase (Auth, Postgres, Realtime) · Claude (Opus 5 by default) or OpenAI,
+with structured JSON output.
+
+**When a model call fails**, the screen says so and quotes the provider's own
+error — an exhausted credit balance, a revoked key, a timeout — rather than
+telling you to set a key you have already set. No UI component library — the primitives in `components/ui.tsx` are
 about 400 lines and carry the whole design system.
 
 ## Scope

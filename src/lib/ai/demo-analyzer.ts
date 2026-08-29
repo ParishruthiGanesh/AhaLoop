@@ -42,10 +42,16 @@ const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
  * completely different problems for the person reading the screen, so never
  * tell someone to set a key they have already set.
  */
-export function modelUnavailableNote(llmAttempted: boolean): string {
-  return llmAttempted
-    ? "A model is configured, but the request to it failed — so this fell back to the built-in analyzer. Check the terminal running the server for the reason; the usual causes are an exhausted credit balance or a revoked key."
-    : "Set ANTHROPIC_API_KEY or OPENAI_API_KEY in .env.local and restart the server to have this read by a model.";
+export function modelUnavailableNote(
+  llmAttempted: boolean,
+  providerError?: string | null,
+): string {
+  if (!llmAttempted) {
+    return "Set ANTHROPIC_API_KEY or OPENAI_API_KEY in .env.local and restart the server to have this read by a model.";
+  }
+  return providerError
+    ? `A model is configured, but the request to it failed, so this fell back to the built-in analyzer. The provider said: "${providerError}"`
+    : "A model is configured, but the request to it failed, so this fell back to the built-in analyzer. Check the terminal running the server for the reason.";
 }
 
 export interface Classification {
@@ -379,6 +385,8 @@ export function buildDiagnosis(args: {
   concept: string;
   /** True when a model is configured, so the wording blames the call, not the key. */
   llmAttempted?: boolean;
+  /** The provider's own error message, shown verbatim so the cause is visible. */
+  providerError?: string | null;
 }): {
   misconception: string;
   whyReasoningFails: string;
@@ -399,7 +407,7 @@ export function buildDiagnosis(args: {
     return {
       misconception:
         "No confident diagnosis — this reasoning is outside what the demo analyzer knows.",
-      whyReasoningFails: `The built-in analyzer only recognises one lesson — accuracy, precision, recall and class imbalance. Your answer about ${args.concept.toLowerCase()} does not match anything in it, and inventing a misconception here would be worse than admitting the gap. ${modelUnavailableNote(args.llmAttempted ?? false)}`,
+      whyReasoningFails: `The built-in analyzer only recognises one lesson — accuracy, precision, recall and class imbalance. Your answer about ${args.concept.toLowerCase()} does not match anything in it, and inventing a misconception here would be worse than admitting the gap. ${modelUnavailableNote(args.llmAttempted ?? false, args.providerError)}`,
       counterexample:
         "The general habit worth checking either way: before trusting any summary number, ask what a trivial baseline would score on the same data.",
       missingPrerequisites: [],
@@ -480,6 +488,7 @@ export const DEMO_LANGUAGES = ["English", "Telugu", "Hindi", "Spanish", "French"
 export function buildExplanation(
   req: ExplanationRequest,
   llmAttempted = false,
+  providerError?: string | null,
 ): Explanation {
   const lang = req.language.trim().toLowerCase();
 
@@ -495,7 +504,7 @@ export function buildExplanation(
       body: [
         `Explain My Way rewrites a concept into whichever style or language you ask for, but it needs a model to do that for "${req.concept}".`,
         "The built-in explanations only cover this build's sample lesson: accuracy, precision, recall and class imbalance.",
-        modelUnavailableNote(llmAttempted),
+        modelUnavailableNote(llmAttempted, providerError),
       ],
       visual: [],
       keyTerms: [],
@@ -723,6 +732,7 @@ export function evaluateTeachBack(
   originalMisconception: string,
   concept = "",
   llmAttempted = false,
+  providerError?: string | null,
 ): TeachBackEvaluation {
   // The rubric below checks for the sample lesson's specific ideas, so it
   // cannot judge an explanation about anything else. Say that plainly rather
@@ -738,7 +748,7 @@ export function evaluateTeachBack(
       masteryState: "yellow",
       score: 0,
       feedback: `Your explanation was recorded, but this build cannot mark it. The built-in rubric only covers one lesson — accuracy, precision, recall and class imbalance — and grading a "${concept}" answer against that rubric would tell you nothing true.`,
-      nextStep: modelUnavailableNote(llmAttempted),
+      nextStep: modelUnavailableNote(llmAttempted, providerError),
       generatedBy: "demo",
     };
   }

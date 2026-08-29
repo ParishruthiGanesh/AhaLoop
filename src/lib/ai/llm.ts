@@ -3,6 +3,7 @@ import "server-only";
 import {
   anthropicApiKey,
   anthropicBaseUrl,
+  anthropicEffort,
   anthropicModel,
   isLlmConfigured,
   llmProvider,
@@ -30,7 +31,28 @@ export interface JsonSchema {
   additionalProperties?: boolean;
 }
 
-const TIMEOUT_MS = Number(process.env.LLM_TIMEOUT_MS ?? 45_000);
+const TIMEOUT_MS = Number(process.env.LLM_TIMEOUT_MS ?? 60_000);
+
+/**
+ * The last provider failure, so the UI can tell the user what actually went
+ * wrong instead of making them read the server log. Only the provider's own
+ * message is kept — never the request, which would carry the API key.
+ */
+let lastProviderError: string | null = null;
+
+export function getLastProviderError(): string | null {
+  return lastProviderError;
+}
+
+function recordProviderError(raw: string) {
+  try {
+    const parsed = JSON.parse(raw) as { error?: { message?: string } };
+    lastProviderError = parsed.error?.message ?? raw;
+  } catch {
+    lastProviderError = raw;
+  }
+  lastProviderError = lastProviderError.slice(0, 300);
+}
 
 export async function generateStructured<T>(args: {
   system: string;
@@ -51,9 +73,20 @@ export async function generateStructured<T>(args: {
         : await callOpenAI(args, controller.signal);
 
     if (raw == null) return null;
-    return args.validate(raw) ? raw : null;
+    if (!args.validate(raw)) {
+      lastProviderError =
+        "The model replied, but the response did not match the expected structure.";
+      return null;
+    }
+    lastProviderError = null;
+    return raw;
   } catch (error) {
-    console.error("[thinktrace] LLM call failed:", (error as Error)?.message);
+    const message = (error as Error)?.message ?? "unknown error";
+    lastProviderError =
+      (error as Error)?.name === "AbortError"
+        ? `The model did not respond within ${Math.round(TIMEOUT_MS / 1000)}s.`
+        : message;
+    console.error("[thinktrace] LLM call failed:", message);
     return null;
   } finally {
     clearTimeout(timer);
@@ -74,7 +107,8 @@ async function callAnthropic(
     },
     body: JSON.stringify({
       model: anthropicModel,
-      max_tokens: 8192,
+      max_tokens: 16_000,
+      output_config: { effort: anthropicEffort },
       system: args.system,
       tools: [
         {
@@ -89,7 +123,9 @@ async function callAnthropic(
   });
 
   if (!res.ok) {
-    console.error("[thinktrace] Anthropic error", res.status, await safeText(res));
+    const body = await safeText(res);
+    recordProviderError(body);
+    console.error("[thinktrace] Anthropic error", res.status, body);
     return null;
   }
 
@@ -129,7 +165,9 @@ async function callOpenAI(
   });
 
   if (!res.ok) {
-    console.error("[thinktrace] OpenAI error", res.status, await safeText(res));
+    const body = await safeText(res);
+    recordProviderError(body);
+    console.error("[thinktrace] OpenAI error", res.status, body);
     return null;
   }
 
