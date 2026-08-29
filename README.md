@@ -92,7 +92,7 @@ same option for different reasons do not.
 | **Student verdict** | Confirm, reject or flag the diagnosis as unclear — rejecting it stops the cycle rather than practising against the wrong premise |
 | **Prerequisite Detective** | The shortest repair path through the concept graph: two or three short concepts, foundation first |
 | **ErrorTwin** | Practice built around the *reasoning pattern* — a similar case, the same trap in a new domain, then a transfer question. Generated for the student's own topic when a model key is set; a vetted question bank is the fallback |
-| **Explain My Way** | Simple, technical, step-by-step, low-text visual or analogy — in another language, optionally keeping technical terms in English. Read-aloud via the browser speech API |
+| **Explain My Way** | Simple, technical, step-by-step, low-text visual or analogy — in another language (Telugu, Kannada, Hindi and more, or anything you type with a model key), optionally keeping technical terms in English. Read-aloud via the browser speech API |
 | **PerspectiveLab** | The same concept from a physician, a security analyst, an examiner, a data scientist and an everyday analogy |
 | **Teach-back** | The student explains it in their own words; the evaluation decides whether the original misconception is gone |
 
@@ -312,8 +312,8 @@ than a shallow version of every feature in the product vision. Known limits:
   are generated for the student's own subject and validated (every item needs
   at least two distinct options and a correct id among them) before they are
   shown. The built-in graph and question bank remain as fallbacks.
-- Without a model key, translation ships as curated text for Telugu, Hindi,
-  Spanish and French; any other language is reported as unavailable rather than
-  silently returning English.
+- Without a model key, translation ships as curated text for Telugu, Kannada,
+  Hindi, Spanish and French; any other language is reported as unavailable
+  rather than silently returning English. With a key, type any language.
 - Video recommendations are curated links, not retrieved and relevance-checked.
 - Demo-mode data lives in the server's memory and resets on restart.

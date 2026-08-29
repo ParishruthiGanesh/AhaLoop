@@ -19,7 +19,7 @@ export const viewport: Viewport = {
 };
 
 const FONT_STACK =
-  'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Noto Sans Telugu", "Noto Sans Devanagari", sans-serif, "Apple Color Emoji", "Segoe UI Emoji"';
+  'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Noto Sans Telugu", "Noto Sans Kannada", "Noto Sans Devanagari", sans-serif, "Apple Color Emoji", "Segoe UI Emoji"';
 
 export default function RootLayout({
   children,

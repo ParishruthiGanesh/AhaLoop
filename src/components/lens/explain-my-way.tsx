@@ -24,7 +24,14 @@ const STYLES: { key: ExplanationStyle; label: string; hint: string }[] = [
   { key: "analogy", label: "Real-world analogy", hint: "One sustained comparison" },
 ];
 
-const SUGGESTED_LANGUAGES = ["English", "Telugu", "Hindi", "Spanish", "French"];
+const SUGGESTED_LANGUAGES = [
+  "English",
+  "Telugu",
+  "Kannada",
+  "Hindi",
+  "Spanish",
+  "French",
+];
 
 type ExplanationResult = Explanation & { languageUnavailable?: boolean };
 

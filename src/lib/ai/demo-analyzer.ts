@@ -463,6 +463,12 @@ export const DEMO_TRANSLATIONS: Record<string, string[]> = {
     "అసలు ప్రశ్న: నిజమైన fraud లలో model ఎన్నింటిని పట్టుకుంది? దీన్ని recall కొలుస్తుంది.",
     "కాబట్టి ముందు class imbalance చూడండి, ఆ తరువాత metric ఎంచుకోండి.",
   ],
+  kannada: [
+    "ಕೇವಲ 1% ಮಾತ್ರ fraud ಇರುವ ಡೇಟಾದಲ್ಲಿ, ಪ್ರತಿ ವಹಿವಾಟನ್ನೂ \"fraud ಅಲ್ಲ\" ಎಂದು ಹೇಳುವ model ಕೂಡ 99% accuracy ಪಡೆಯುತ್ತದೆ.",
+    "ಆದ್ದರಿಂದ 95% accuracy ಎಂಬ ಸಂಖ್ಯೆ ಆ model ಒಳ್ಳೆಯದು ಎಂದು ಸಾಬೀತುಪಡಿಸುವುದಿಲ್ಲ — ಅದು ಕನಿಷ್ಠ ಮಟ್ಟಕ್ಕಿಂತಲೂ ಕಡಿಮೆ.",
+    "ನಿಜವಾದ ಪ್ರಶ್ನೆ ಇದು: ಒಟ್ಟು ನಿಜವಾದ fraud ಗಳಲ್ಲಿ model ಎಷ್ಟನ್ನು ಹಿಡಿಯಿತು? ಇದನ್ನು recall ಅಳೆಯುತ್ತದೆ.",
+    "ಆದ್ದರಿಂದ ಮೊದಲು class imbalance ನೋಡಿ, ನಂತರ metric ಆಯ್ಕೆ ಮಾಡಿ.",
+  ],
   hindi: [
     "जिस डेटा में केवल 1% fraud है, वहाँ हर लेन-देन को \"fraud नहीं\" कहने वाला model भी 99% accuracy पा लेता है।",
     "इसलिए 95% accuracy यह साबित नहीं करती कि model अच्छा है — यह तो baseline से भी कम है।",
@@ -483,7 +489,14 @@ export const DEMO_TRANSLATIONS: Record<string, string[]> = {
   ],
 };
 
-export const DEMO_LANGUAGES = ["English", "Telugu", "Hindi", "Spanish", "French"];
+export const DEMO_LANGUAGES = [
+  "English",
+  "Telugu",
+  "Kannada",
+  "Hindi",
+  "Spanish",
+  "French",
+];
 
 export function buildExplanation(
   req: ExplanationRequest,
