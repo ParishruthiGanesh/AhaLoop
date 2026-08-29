@@ -10,6 +10,7 @@ import {
   DEMO_TRANSLATIONS,
 } from "./demo-analyzer";
 import { generateStructured, type JsonSchema } from "./llm";
+import { isLlmConfigured } from "../config";
 import { buildErrorTwin } from "./demo-analyzer";
 import { MISCONCEPTIONS } from "../lesson";
 import type {
@@ -411,6 +412,7 @@ export async function diagnoseResponse(args: {
     selectedOptionId: args.selectedOptionId,
     correctOptionId: args.correctOptionId,
     concept: args.concept,
+    llmAttempted: isLlmConfigured,
   });
 
   const raw = await generateStructured<RawDiagnosis>({
@@ -557,7 +559,7 @@ export const OFFLINE_LANGUAGES = Object.keys(DEMO_TRANSLATIONS);
 export async function explain(
   req: ExplanationRequest,
 ): Promise<Explanation & { languageUnavailable?: boolean }> {
-  const demo = buildExplanation(req);
+  const demo = buildExplanation(req, isLlmConfigured);
   const lang = req.language.trim();
   const isEnglish = !lang || lang.toLowerCase() === "english";
 
@@ -655,7 +657,7 @@ function isRawPerspectives(v: unknown): v is RawPerspectives {
 export async function perspectives(
   concept: string,
   misconception: string,
-): Promise<PerspectiveSet> {
+): Promise<PerspectiveSet & { llmAttempted: boolean }> {
   const demo = buildPerspectives(concept);
 
   const raw = await generateStructured<RawPerspectives>({
@@ -671,9 +673,10 @@ Give five explanations of the same concept from genuinely different vantage poin
 Each perspective: persona (a job title), domain, glyph (one emoji), headline (one vivid first-person sentence), body (3-5 sentences in that person's voice, addressing the misconception from inside their work). Do not repeat the same example across perspectives.`,
   });
 
-  if (!raw) return demo;
+  if (!raw) return { ...demo, llmAttempted: isLlmConfigured };
 
   return {
+    llmAttempted: isLlmConfigured,
     concept,
     perspectives: raw.perspectives.slice(0, 6).map((p, i) => ({
       id: `p-${i}`,
@@ -752,7 +755,12 @@ export async function assessTeachBack(args: {
   concept: string;
   misconception: string;
 }): Promise<TeachBackEvaluation> {
-  const demo = evaluateTeachBack(args.text, args.misconception, args.concept);
+  const demo = evaluateTeachBack(
+    args.text,
+    args.misconception,
+    args.concept,
+    isLlmConfigured,
+  );
 
   const raw = await generateStructured<RawTeachBack>({
     system: TEACHING_SYSTEM,

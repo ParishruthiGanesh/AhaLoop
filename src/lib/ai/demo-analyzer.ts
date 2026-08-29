@@ -35,6 +35,19 @@ import type {
 
 const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
 
+/**
+ * Why the built-in analyzer is answering instead of a model.
+ *
+ * "No key configured" and "a key is configured but the call failed" are
+ * completely different problems for the person reading the screen, so never
+ * tell someone to set a key they have already set.
+ */
+export function modelUnavailableNote(llmAttempted: boolean): string {
+  return llmAttempted
+    ? "A model is configured, but the request to it failed — so this fell back to the built-in analyzer. Check the terminal running the server for the reason; the usual causes are an exhausted credit balance or a revoked key."
+    : "Set ANTHROPIC_API_KEY or OPENAI_API_KEY in .env.local and restart the server to have this read by a model.";
+}
+
 export interface Classification {
   profile: MisconceptionProfile | null;
   confidence: number;
@@ -364,6 +377,8 @@ export function buildDiagnosis(args: {
   selectedOptionId: string | null;
   correctOptionId: string | null;
   concept: string;
+  /** True when a model is configured, so the wording blames the call, not the key. */
+  llmAttempted?: boolean;
 }): {
   misconception: string;
   whyReasoningFails: string;
@@ -384,7 +399,7 @@ export function buildDiagnosis(args: {
     return {
       misconception:
         "No confident diagnosis — this reasoning is outside what the demo analyzer knows.",
-      whyReasoningFails: `Without a language-model key, ThinkTrace diagnoses reasoning against a built-in catalogue for one lesson: accuracy, precision, recall and class imbalance. Your answer about ${args.concept.toLowerCase()} does not match anything in it, and inventing a misconception here would be worse than admitting the gap. Set ANTHROPIC_API_KEY or OPENAI_API_KEY and re-run this diagnosis to have your actual words read.`,
+      whyReasoningFails: `The built-in analyzer only recognises one lesson — accuracy, precision, recall and class imbalance. Your answer about ${args.concept.toLowerCase()} does not match anything in it, and inventing a misconception here would be worse than admitting the gap. ${modelUnavailableNote(args.llmAttempted ?? false)}`,
       counterexample:
         "The general habit worth checking either way: before trusting any summary number, ask what a trivial baseline would score on the same data.",
       missingPrerequisites: [],
@@ -462,7 +477,10 @@ export const DEMO_TRANSLATIONS: Record<string, string[]> = {
 
 export const DEMO_LANGUAGES = ["English", "Telugu", "Hindi", "Spanish", "French"];
 
-export function buildExplanation(req: ExplanationRequest): Explanation {
+export function buildExplanation(
+  req: ExplanationRequest,
+  llmAttempted = false,
+): Explanation {
   const lang = req.language.trim().toLowerCase();
 
   // The curated explanations are all about the sample lesson. Handing them to
@@ -471,11 +489,13 @@ export function buildExplanation(req: ExplanationRequest): Explanation {
     return {
       style: req.style,
       language: "English",
-      title: "Not available without a model key",
+      title: llmAttempted
+        ? "Could not reach the model"
+        : "Not available without a model key",
       body: [
-        `Explain My Way rewrites a concept into whichever style or language you ask for, but it needs a language model to do that for "${req.concept}".`,
-        "Without one, this build only carries hand-written explanations for its sample lesson: accuracy, precision, recall and class imbalance.",
-        "Set ANTHROPIC_API_KEY or OPENAI_API_KEY in .env.local, restart, and every style and language works on any topic.",
+        `Explain My Way rewrites a concept into whichever style or language you ask for, but it needs a model to do that for "${req.concept}".`,
+        "The built-in explanations only cover this build's sample lesson: accuracy, precision, recall and class imbalance.",
+        modelUnavailableNote(llmAttempted),
       ],
       visual: [],
       keyTerms: [],
@@ -702,6 +722,7 @@ export function evaluateTeachBack(
   text: string,
   originalMisconception: string,
   concept = "",
+  llmAttempted = false,
 ): TeachBackEvaluation {
   // The rubric below checks for the sample lesson's specific ideas, so it
   // cannot judge an explanation about anything else. Say that plainly rather
@@ -716,9 +737,8 @@ export function evaluateTeachBack(
       canTransfer: false,
       masteryState: "yellow",
       score: 0,
-      feedback: `Your explanation was recorded, but this build cannot mark it. Without a language model, teach-back is graded against a rubric written for one lesson — accuracy, precision, recall and class imbalance — and grading a "${concept}" answer against that rubric would tell you nothing true.`,
-      nextStep:
-        "Set ANTHROPIC_API_KEY or OPENAI_API_KEY in .env.local and submit again to have this explanation actually assessed.",
+      feedback: `Your explanation was recorded, but this build cannot mark it. The built-in rubric only covers one lesson — accuracy, precision, recall and class imbalance — and grading a "${concept}" answer against that rubric would tell you nothing true.`,
+      nextStep: modelUnavailableNote(llmAttempted),
       generatedBy: "demo",
     };
   }
