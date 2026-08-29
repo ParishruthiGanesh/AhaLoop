@@ -15,6 +15,7 @@ import { MISCONCEPTIONS } from "../lesson";
 import type {
   ConfusionMap,
   ErrorTwin,
+  ErrorTwinQuestion,
   Explanation,
   ExplanationRequest,
   MasteryState,
@@ -205,6 +206,54 @@ Then give the teacher: the single most common misconception, the missing prerequ
 /* ConceptLens diagnosis                                               */
 /* ------------------------------------------------------------------ */
 
+const REPAIR_NODE_SCHEMA = {
+  type: "object",
+  properties: {
+    concept: { type: "string" },
+    why: { type: "string" },
+    explanation: { type: "string" },
+    example: { type: "string" },
+    checkQuestion: { type: "string" },
+    checkAnswer: { type: "string" },
+  },
+  required: [
+    "concept",
+    "why",
+    "explanation",
+    "example",
+    "checkQuestion",
+    "checkAnswer",
+  ],
+};
+
+const PRACTICE_QUESTION_SCHEMA = {
+  type: "object",
+  properties: {
+    kind: {
+      type: "string",
+      enum: ["similar", "new-context", "boundary", "explain", "transfer"],
+    },
+    prompt: { type: "string" },
+    options: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: { id: { type: "string" }, text: { type: "string" } },
+        required: ["id", "text"],
+      },
+    },
+    correctOptionId: { type: "string" },
+    trapExplanation: { type: "string" },
+  },
+  required: [
+    "kind",
+    "prompt",
+    "options",
+    "correctOptionId",
+    "trapExplanation",
+  ],
+};
+
 const DIAGNOSIS_SCHEMA: JsonSchema = {
   type: "object",
   properties: {
@@ -215,6 +264,8 @@ const DIAGNOSIS_SCHEMA: JsonSchema = {
     confidence: { type: "number" },
     errorPattern: { type: "string" },
     errorPatternDescription: { type: "string" },
+    repairPath: { type: "array", items: REPAIR_NODE_SCHEMA },
+    practiceQuestions: { type: "array", items: PRACTICE_QUESTION_SCHEMA },
   },
   required: [
     "misconception",
@@ -224,8 +275,27 @@ const DIAGNOSIS_SCHEMA: JsonSchema = {
     "confidence",
     "errorPattern",
     "errorPatternDescription",
+    "repairPath",
+    "practiceQuestions",
   ],
 };
+
+interface RawRepairNode {
+  concept: string;
+  why: string;
+  explanation: string;
+  example: string;
+  checkQuestion: string;
+  checkAnswer: string;
+}
+
+interface RawPracticeQuestion {
+  kind: ErrorTwinQuestion["kind"];
+  prompt: string;
+  options: { id: string; text: string }[];
+  correctOptionId: string;
+  trapExplanation: string;
+}
 
 interface RawDiagnosis {
   misconception: string;
@@ -235,6 +305,8 @@ interface RawDiagnosis {
   confidence: number;
   errorPattern: string;
   errorPatternDescription: string;
+  repairPath: RawRepairNode[];
+  practiceQuestions: RawPracticeQuestion[];
 }
 
 function isRawDiagnosis(v: unknown): v is RawDiagnosis {
@@ -247,8 +319,70 @@ function isRawDiagnosis(v: unknown): v is RawDiagnosis {
     isStrArr(o.missingPrerequisites) &&
     typeof o.confidence === "number" &&
     isStr(o.errorPattern) &&
-    isStr(o.errorPatternDescription)
+    isStr(o.errorPatternDescription) &&
+    Array.isArray(o.repairPath) &&
+    Array.isArray(o.practiceQuestions)
   );
+}
+
+/** A repair node is only usable if every panel the UI renders is populated. */
+function usableRepairNodes(nodes: RawRepairNode[]): PrerequisiteNode[] {
+  return nodes
+    .filter(
+      (n) =>
+        isStr(n?.concept) &&
+        isStr(n?.why) &&
+        isStr(n?.explanation) &&
+        isStr(n?.example) &&
+        isStr(n?.checkQuestion) &&
+        isStr(n?.checkAnswer),
+    )
+    .slice(0, 3)
+    .map((n, i) => ({
+      id: `llm-${i}-${n.concept.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 32)}`,
+      concept: n.concept,
+      why: n.why,
+      explanation: n.explanation,
+      example: n.example,
+      checkQuestion: n.checkQuestion,
+      checkAnswer: n.checkAnswer,
+    }));
+}
+
+const PRACTICE_KINDS: ErrorTwinQuestion["kind"][] = [
+  "similar",
+  "new-context",
+  "boundary",
+  "explain",
+  "transfer",
+];
+
+/**
+ * A generated practice question is only usable if it is actually answerable:
+ * at least two distinct options and a correct id that exists among them.
+ * Anything malformed is dropped rather than shown as an unanswerable item.
+ */
+function usablePracticeQuestions(
+  questions: RawPracticeQuestion[],
+): ErrorTwinQuestion[] {
+  return questions
+    .filter((q) => {
+      if (!isStr(q?.prompt) || !isStr(q?.trapExplanation)) return false;
+      if (!Array.isArray(q.options) || q.options.length < 2) return false;
+      if (!q.options.every((o) => isStr(o?.id) && isStr(o?.text))) return false;
+      const ids = new Set(q.options.map((o) => o.id));
+      if (ids.size !== q.options.length) return false;
+      return isStr(q.correctOptionId) && ids.has(q.correctOptionId);
+    })
+    .slice(0, 3)
+    .map((q, i) => ({
+      id: `et-llm-${i}`,
+      kind: PRACTICE_KINDS.includes(q.kind) ? q.kind : "similar",
+      prompt: q.prompt,
+      options: q.options.map((o) => ({ id: o.id, text: o.text })),
+      correctOptionId: q.correctOptionId,
+      trapExplanation: q.trapExplanation,
+    }));
 }
 
 export interface DiagnosisResult {
@@ -298,6 +432,8 @@ Diagnose the belief behind this reasoning.
 - confidence: 0 to 1, how certain the diagnosis is given how much the student actually wrote.
 - errorPattern: the reasoning habit that will reappear on other questions, not this question's mistake.
 - errorPatternDescription: one or two sentences addressed to the student as "Your ErrorTwin ...".
+- repairPath: 2-3 prerequisite concepts, most foundational FIRST. Each needs: concept (a short name), why (why it blocks this student), explanation (a one-minute explanation), example (worked, concrete, with real numbers where the subject allows), checkQuestion and checkAnswer (a single check for understanding).
+- practiceQuestions: exactly 3 multiple-choice questions that target the errorPattern rather than this specific question. Use kinds "similar", "new-context" and "transfer" in that order: a near-identical case, the same trap in a different setting, then a transfer question in an unrelated domain. Each needs 4 options with ids "a"-"d", a correctOptionId that is one of them, and trapExplanation saying why the tempting wrong option is tempting. Build one distractor directly out of this student's misconception so a relapse is detectable. Every question must be answerable from the prompt alone.
 
 If the reasoning is actually correct, say so in misconception and set confidence accordingly.`,
   });
@@ -307,11 +443,24 @@ If the reasoning is actually correct, say so in misconception and set confidence
   const prerequisites = raw.missingPrerequisites
     .map((p) => p.toLowerCase().trim())
     .slice(0, 4);
-  const repairPath = buildRepairPath(prerequisites);
 
-  // ErrorTwin questions come from the vetted bank so practice items are always
-  // well-formed; the model chooses which reasoning pattern to target.
-  const matched =
+  // Prefer the model's own repair path — it is the only one that can cover a
+  // topic outside the built-in graph. Fall back to the graph, then to the
+  // demo analyzer, so the stage is never empty on the sample lesson.
+  const generatedRepair = usableRepairNodes(raw.repairPath);
+  const graphRepair = buildRepairPath(prerequisites);
+  const repairPath =
+    generatedRepair.length > 0
+      ? generatedRepair
+      : graphRepair.length > 0
+        ? graphRepair
+        : demo.repairPath;
+
+  // Same for practice. The vetted bank is the fallback, not the default, so
+  // ErrorTwin targets the student's actual subject rather than this build's
+  // sample lesson.
+  const generatedQuestions = usablePracticeQuestions(raw.practiceQuestions);
+  const bankMatch =
     MISCONCEPTIONS.find((m) =>
       raw.misconception.toLowerCase().includes(m.id.split("-")[0]),
     ) ??
@@ -320,7 +469,10 @@ If the reasoning is actually correct, say so in misconception and set confidence
     ) ??
     null;
 
-  const errorTwin = buildErrorTwin(matched);
+  const questions =
+    generatedQuestions.length >= 3
+      ? generatedQuestions
+      : buildErrorTwin(bankMatch).questions;
 
   return {
     misconception: raw.misconception,
@@ -328,11 +480,11 @@ If the reasoning is actually correct, say so in misconception and set confidence
     counterexample: raw.counterexample,
     missingPrerequisites: prerequisites,
     confidence: Math.max(0, Math.min(1, raw.confidence)),
-    repairPath: repairPath.length > 0 ? repairPath : demo.repairPath,
+    repairPath,
     errorTwin: {
       pattern: raw.errorPattern,
       description: raw.errorPatternDescription,
-      questions: errorTwin.questions,
+      questions,
     },
     masteryState: demo.masteryState,
     generatedBy: "llm",
@@ -600,7 +752,7 @@ export async function assessTeachBack(args: {
   concept: string;
   misconception: string;
 }): Promise<TeachBackEvaluation> {
-  const demo = evaluateTeachBack(args.text, args.misconception);
+  const demo = evaluateTeachBack(args.text, args.misconception, args.concept);
 
   const raw = await generateStructured<RawTeachBack>({
     system: TEACHING_SYSTEM,

@@ -2,10 +2,12 @@ import "server-only";
 
 import {
   anthropicApiKey,
+  anthropicBaseUrl,
   anthropicModel,
   isLlmConfigured,
   llmProvider,
   openaiApiKey,
+  openaiBaseUrl,
   openaiModel,
 } from "../config";
 
@@ -62,7 +64,7 @@ async function callAnthropic(
   args: { system: string; prompt: string; schemaName: string; schema: JsonSchema },
   signal: AbortSignal,
 ): Promise<unknown> {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const res = await fetch(`${anthropicBaseUrl}/v1/messages`, {
     method: "POST",
     signal,
     headers: {
@@ -72,7 +74,7 @@ async function callAnthropic(
     },
     body: JSON.stringify({
       model: anthropicModel,
-      max_tokens: 4096,
+      max_tokens: 8192,
       system: args.system,
       tools: [
         {
@@ -102,7 +104,7 @@ async function callOpenAI(
   args: { system: string; prompt: string; schemaName: string; schema: JsonSchema },
   signal: AbortSignal,
 ): Promise<unknown> {
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+  const res = await fetch(`${openaiBaseUrl}/v1/chat/completions`, {
     method: "POST",
     signal,
     headers: {

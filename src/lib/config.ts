@@ -28,6 +28,17 @@ export const llmProvider: "anthropic" | "openai" | "none" = anthropicApiKey
 
 export const isLlmConfigured = llmProvider !== "none";
 
+/**
+ * Optional API base overrides, for a corporate gateway, a proxy, or a local
+ * mock during testing. Default to the providers' own endpoints.
+ */
+export const anthropicBaseUrl =
+  process.env.ANTHROPIC_BASE_URL?.trim().replace(/\/$/, "") ||
+  "https://api.anthropic.com";
+export const openaiBaseUrl =
+  process.env.OPENAI_BASE_URL?.trim().replace(/\/$/, "") ||
+  "https://api.openai.com";
+
 export const anthropicModel =
   process.env.ANTHROPIC_MODEL?.trim() || "claude-sonnet-4-5";
 export const openaiModel = process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini";

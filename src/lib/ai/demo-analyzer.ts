@@ -701,7 +701,28 @@ const MEMORISED_MARKERS = [
 export function evaluateTeachBack(
   text: string,
   originalMisconception: string,
+  concept = "",
 ): TeachBackEvaluation {
+  // The rubric below checks for the sample lesson's specific ideas, so it
+  // cannot judge an explanation about anything else. Say that plainly rather
+  // than scoring a physics answer against a metrics checklist.
+  if (concept && !isSampleLessonConcept(concept)) {
+    return {
+      resolved: false,
+      misconceptionStillPresent: false,
+      conceptsCovered: [],
+      conceptsMissing: [],
+      appearsMemorised: false,
+      canTransfer: false,
+      masteryState: "yellow",
+      score: 0,
+      feedback: `Your explanation was recorded, but this build cannot mark it. Without a language model, teach-back is graded against a rubric written for one lesson — accuracy, precision, recall and class imbalance — and grading a "${concept}" answer against that rubric would tell you nothing true.`,
+      nextStep:
+        "Set ANTHROPIC_API_KEY or OPENAI_API_KEY in .env.local and submit again to have this explanation actually assessed.",
+      generatedBy: "demo",
+    };
+  }
+
   const t = norm(text);
   const words = t.split(/\s+/).filter(Boolean).length;
 
