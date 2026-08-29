@@ -1,0 +1,47 @@
+/**
+ * Runtime configuration.
+ *
+ * ThinkTrace runs in two modes and the UI always says which one it is in:
+ *
+ *  - Connected mode: Supabase for auth/data/realtime, an LLM for analysis.
+ *  - Demo mode: an in-memory store plus the deterministic demo analyzer.
+ *
+ * The two are independent — you can run Supabase without an LLM key, or an
+ * LLM key without Supabase.
+ */
+
+export const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || "";
+export const supabaseAnonKey =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() || "";
+
+export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+
+/** Server-only. Never import these into a client component. */
+export const anthropicApiKey = process.env.ANTHROPIC_API_KEY?.trim() || "";
+export const openaiApiKey = process.env.OPENAI_API_KEY?.trim() || "";
+
+export const llmProvider: "anthropic" | "openai" | "none" = anthropicApiKey
+  ? "anthropic"
+  : openaiApiKey
+    ? "openai"
+    : "none";
+
+export const isLlmConfigured = llmProvider !== "none";
+
+export const anthropicModel =
+  process.env.ANTHROPIC_MODEL?.trim() || "claude-sonnet-4-5";
+export const openaiModel = process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini";
+
+export interface ModeInfo {
+  supabase: boolean;
+  llm: boolean;
+  llmProvider: string;
+}
+
+export function getModeInfo(): ModeInfo {
+  return {
+    supabase: isSupabaseConfigured,
+    llm: isLlmConfigured,
+    llmProvider,
+  };
+}
