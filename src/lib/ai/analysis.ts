@@ -42,8 +42,28 @@ import type {
  */
 
 const isStr = (v: unknown): v is string => typeof v === "string" && v.length > 0;
-const isStrArr = (v: unknown): v is string[] =>
-  Array.isArray(v) && v.every((x) => typeof x === "string");
+
+const asRecord = (v: unknown): Record<string, unknown> | null =>
+  typeof v === "object" && v !== null ? (v as Record<string, unknown>) : null;
+
+/** A string, or a fallback. Never throws away a whole response over one field. */
+const str = (v: unknown, fallback = ""): string =>
+  typeof v === "string" && v.trim().length > 0 ? v : fallback;
+
+/** Accepts an array of strings, or a single string, or nothing. */
+const strList = (v: unknown): string[] => {
+  if (typeof v === "string" && v.trim().length > 0) return [v];
+  if (!Array.isArray(v)) return [];
+  return v.filter((x): x is string => typeof x === "string" && x.length > 0);
+};
+
+const num = (v: unknown, fallback: number): number =>
+  typeof v === "number" && Number.isFinite(v) ? v : fallback;
+
+const bool = (v: unknown, fallback = false): boolean =>
+  typeof v === "boolean" ? v : fallback;
+
+const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 
 const TEACHING_SYSTEM = `You are the analysis engine inside ThinkTrace AI, a classroom diagnostic platform.
 You diagnose the *reasoning* behind a student's answer, not just its correctness.
@@ -104,27 +124,39 @@ interface RawConfusion {
   suggestedFollowUpQuestion: string;
 }
 
-function isRawConfusion(v: unknown): v is RawConfusion {
-  if (typeof v !== "object" || v === null) return false;
-  const o = v as Record<string, unknown>;
-  return (
-    Array.isArray(o.groups) &&
-    o.groups.length > 0 &&
-    o.groups.every((g) => {
-      const gg = g as Record<string, unknown>;
-      return (
-        isStr(gg.label) &&
-        isStr(gg.interpretation) &&
-        Array.isArray(gg.responseIndexes) &&
-        typeof gg.isCorrectGroup === "boolean"
-      );
-    }) &&
-    isStr(o.topMisconception) &&
-    isStrArr(o.missingPrerequisites) &&
-    isStr(o.recommendedIntervention) &&
-    isStr(o.counterexample) &&
-    isStr(o.suggestedFollowUpQuestion)
-  );
+/** Only the groups are indispensable — every other field has a sane default. */
+function parseConfusion(v: unknown): RawConfusion | null {
+  const o = asRecord(v);
+  if (!o) return null;
+
+  const groups = arr(o.groups)
+    .map((g) => {
+      const gg = asRecord(g);
+      if (!gg || !isStr(gg.label)) return null;
+      return {
+        label: gg.label,
+        interpretation: str(gg.interpretation, "—"),
+        responseIndexes: arr(gg.responseIndexes).filter(
+          (i): i is number => typeof i === "number",
+        ),
+        isCorrectGroup: bool(gg.isCorrectGroup),
+      };
+    })
+    .filter((g): g is RawConfusion["groups"][number] => g !== null);
+
+  if (groups.length === 0) return null;
+
+  return {
+    groups,
+    topMisconception: str(o.topMisconception, "See the groups below."),
+    missingPrerequisites: strList(o.missingPrerequisites),
+    recommendedIntervention: str(
+      o.recommendedIntervention,
+      "Address the largest group's reasoning with one concrete counterexample.",
+    ),
+    counterexample: str(o.counterexample, ""),
+    suggestedFollowUpQuestion: str(o.suggestedFollowUpQuestion, ""),
+  };
 }
 
 export async function analyzeConfusion(
@@ -154,7 +186,7 @@ export async function analyzeConfusion(
     system: TEACHING_SYSTEM,
     schemaName: "confusion_map",
     schema: CONFUSION_SCHEMA,
-    validate: isRawConfusion,
+    parse: parseConfusion,
     prompt: `Concept under test: ${question.concept}
 Question: ${question.prompt}
 ${
@@ -314,20 +346,29 @@ interface RawDiagnosis {
   practiceQuestions: RawPracticeQuestion[];
 }
 
-function isRawDiagnosis(v: unknown): v is RawDiagnosis {
-  if (typeof v !== "object" || v === null) return false;
-  const o = v as Record<string, unknown>;
-  return (
-    isStr(o.misconception) &&
-    isStr(o.whyReasoningFails) &&
-    isStr(o.counterexample) &&
-    isStrArr(o.missingPrerequisites) &&
-    typeof o.confidence === "number" &&
-    isStr(o.errorPattern) &&
-    isStr(o.errorPatternDescription) &&
-    Array.isArray(o.repairPath) &&
-    Array.isArray(o.practiceQuestions)
-  );
+/**
+ * The misconception and why it fails are the diagnosis. Everything else is
+ * salvageable: the repair path falls back to the concept graph, practice to
+ * the vetted bank, and the rest to a default.
+ */
+function parseDiagnosis(v: unknown): RawDiagnosis | null {
+  const o = asRecord(v);
+  if (!o || !isStr(o.misconception)) return null;
+
+  return {
+    misconception: o.misconception,
+    whyReasoningFails: str(o.whyReasoningFails, ""),
+    counterexample: str(o.counterexample, ""),
+    missingPrerequisites: strList(o.missingPrerequisites),
+    confidence: num(o.confidence, 0.7),
+    errorPattern: str(o.errorPattern, "The reasoning behind this answer"),
+    errorPatternDescription: str(
+      o.errorPatternDescription,
+      "Your ErrorTwin repeats the reasoning that produced this answer.",
+    ),
+    repairPath: arr(o.repairPath) as RawRepairNode[],
+    practiceQuestions: arr(o.practiceQuestions) as RawPracticeQuestion[],
+  };
 }
 
 /** A repair node is only usable if every panel the UI renders is populated. */
@@ -423,7 +464,7 @@ export async function diagnoseResponse(args: {
     system: TEACHING_SYSTEM,
     schemaName: "misconception_diagnosis",
     schema: DIAGNOSIS_SCHEMA,
-    validate: isRawDiagnosis,
+    parse: parseDiagnosis,
     prompt: `Concept: ${args.concept}
 Question the student answered: ${args.questionPrompt}
 Their answer: ${args.selectedOptionText ?? "(open response)"}
@@ -546,16 +587,36 @@ interface RawExplanation {
   keyTerms: { term: string; meaning: string }[];
 }
 
-function isRawExplanation(v: unknown): v is RawExplanation {
-  if (typeof v !== "object" || v === null) return false;
-  const o = v as Record<string, unknown>;
-  return (
-    isStr(o.title) &&
-    isStrArr(o.body) &&
-    o.body.length > 0 &&
-    Array.isArray(o.visual) &&
-    Array.isArray(o.keyTerms)
-  );
+/**
+ * Only the body is indispensable. `visual` and `keyTerms` decorate the page;
+ * a missing one is no reason to discard a good explanation, and `body` may
+ * arrive as a single string rather than an array.
+ */
+function parseExplanation(v: unknown): RawExplanation | null {
+  const o = asRecord(v);
+  if (!o) return null;
+
+  const body = strList(o.body);
+  if (body.length === 0) return null;
+
+  return {
+    title: str(o.title, "Explanation"),
+    body,
+    visual: arr(o.visual)
+      .map((b) => {
+        const bb = asRecord(b);
+        if (!bb || !isStr(bb.label)) return null;
+        return { label: bb.label, detail: str(bb.detail, "") };
+      })
+      .filter((b): b is { label: string; detail: string } => b !== null),
+    keyTerms: arr(o.keyTerms)
+      .map((t) => {
+        const tt = asRecord(t);
+        if (!tt || !isStr(tt.term)) return null;
+        return { term: tt.term, meaning: str(tt.meaning, "") };
+      })
+      .filter((t): t is { term: string; meaning: string } => t !== null),
+  };
 }
 
 const STYLE_BRIEF: Record<string, string> = {
@@ -584,7 +645,7 @@ export async function explain(
     system: TEACHING_SYSTEM,
     schemaName: "explanation",
     schema: EXPLANATION_SCHEMA,
-    validate: isRawExplanation,
+    parse: parseExplanation,
     prompt: `Concept: ${req.concept}
 The student's misconception: ${req.misconception}
 
@@ -661,17 +722,26 @@ interface RawPerspectives {
   }[];
 }
 
-function isRawPerspectives(v: unknown): v is RawPerspectives {
-  if (typeof v !== "object" || v === null) return false;
-  const o = v as Record<string, unknown>;
-  return (
-    Array.isArray(o.perspectives) &&
-    o.perspectives.length >= 3 &&
-    o.perspectives.every((p) => {
-      const pp = p as Record<string, unknown>;
-      return isStr(pp.persona) && isStr(pp.headline) && isStr(pp.body);
+function parsePerspectives(v: unknown): RawPerspectives | null {
+  const o = asRecord(v);
+  if (!o) return null;
+
+  const perspectives = arr(o.perspectives)
+    .map((p) => {
+      const pp = asRecord(p);
+      if (!pp || !isStr(pp.persona) || !isStr(pp.body)) return null;
+      return {
+        persona: pp.persona,
+        domain: str(pp.domain, ""),
+        glyph: str(pp.glyph, "💡"),
+        headline: str(pp.headline, ""),
+        body: pp.body,
+      };
     })
-  );
+    .filter((p): p is RawPerspectives["perspectives"][number] => p !== null);
+
+  // Two voices is still a useful contrast; one is not.
+  return perspectives.length >= 2 ? { perspectives } : null;
 }
 
 export async function perspectives(
@@ -686,7 +756,7 @@ export async function perspectives(
     system: TEACHING_SYSTEM,
     schemaName: "perspective_set",
     schema: PERSPECTIVE_SCHEMA,
-    validate: isRawPerspectives,
+    parse: parsePerspectives,
     prompt: `Concept: ${concept}
 The student's misconception: ${misconception}
 
@@ -761,20 +831,22 @@ interface RawTeachBack {
   nextStep: string;
 }
 
-function isRawTeachBack(v: unknown): v is RawTeachBack {
-  if (typeof v !== "object" || v === null) return false;
-  const o = v as Record<string, unknown>;
-  return (
-    typeof o.resolved === "boolean" &&
-    typeof o.misconceptionStillPresent === "boolean" &&
-    isStrArr(o.conceptsCovered) &&
-    isStrArr(o.conceptsMissing) &&
-    typeof o.appearsMemorised === "boolean" &&
-    typeof o.canTransfer === "boolean" &&
-    typeof o.score === "number" &&
-    isStr(o.feedback) &&
-    isStr(o.nextStep)
-  );
+/** The verdict and the feedback are the point; the rest have defaults. */
+function parseTeachBack(v: unknown): RawTeachBack | null {
+  const o = asRecord(v);
+  if (!o || !isStr(o.feedback)) return null;
+
+  return {
+    resolved: bool(o.resolved),
+    misconceptionStillPresent: bool(o.misconceptionStillPresent),
+    conceptsCovered: strList(o.conceptsCovered),
+    conceptsMissing: strList(o.conceptsMissing),
+    appearsMemorised: bool(o.appearsMemorised),
+    canTransfer: bool(o.canTransfer),
+    score: num(o.score, 50),
+    feedback: o.feedback,
+    nextStep: str(o.nextStep, "Try explaining it once more, in your own words."),
+  };
 }
 
 export async function assessTeachBack(args: {
@@ -787,7 +859,7 @@ export async function assessTeachBack(args: {
     system: TEACHING_SYSTEM,
     schemaName: "teachback_evaluation",
     schema: TEACHBACK_SCHEMA,
-    validate: isRawTeachBack,
+    parse: parseTeachBack,
     prompt: `Concept: ${args.concept}
 The misconception this student started with: ${args.misconception}
 They were asked: ${args.prompt}

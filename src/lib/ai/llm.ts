@@ -59,7 +59,13 @@ export async function generateStructured<T>(args: {
   prompt: string;
   schemaName: string;
   schema: JsonSchema;
-  validate: (value: unknown) => value is T;
+  /**
+   * Coerce the raw payload into the shape the caller needs, or return null if
+   * it is genuinely unusable. Deliberately a parser rather than a predicate:
+   * a good answer missing one decorative field should be salvaged, not
+   * discarded.
+   */
+  parse: (value: unknown) => T | null;
 }): Promise<T | null> {
   if (!isLlmConfigured) return null;
 
@@ -73,13 +79,22 @@ export async function generateStructured<T>(args: {
         : await callOpenAI(args, controller.signal);
 
     if (raw == null) return null;
-    if (!args.validate(raw)) {
+
+    const parsed = args.parse(raw);
+    if (parsed == null) {
+      const keys =
+        typeof raw === "object" && raw !== null
+          ? Object.keys(raw as Record<string, unknown>).join(", ")
+          : typeof raw;
       lastProviderError =
-        "The model replied, but the response did not match the expected structure.";
+        "The model replied, but the response was missing the parts this screen needs.";
+      console.error(
+        `[thinktrace] unusable ${args.schemaName} payload; keys received: ${keys}`,
+      );
       return null;
     }
     lastProviderError = null;
-    return raw;
+    return parsed;
   } catch (error) {
     const message = (error as Error)?.message ?? "unknown error";
     lastProviderError =
