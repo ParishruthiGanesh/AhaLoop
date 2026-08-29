@@ -287,12 +287,20 @@ about 400 lines and carry the whole design system.
 This is a hackathon MVP. It implements one complete end-to-end journey rather
 than a shallow version of every feature in the product vision. Known limits:
 
-- The demo analyzer's misconception catalogue and ErrorTwin bank cover the
-  sample lesson only. Ask it about another topic and it reports "no confident
-  diagnosis" and points at the missing key, rather than inventing a
-  plausible-looking misconception; unmatched answers get their own *Not
-  classified* group on the confusion map. With a model key configured, any
-  topic works.
+- **The demo analyzer covers the sample lesson only.** Everything structural
+  works on any subject without a key — creating classrooms and join codes,
+  writing your own questions, students joining and typing their own answers
+  and reasoning, the live response feed. What needs the sample lesson (or a
+  model key) is the *analysis*: misconception diagnosis, confusion-map
+  grouping, the prerequisite repair path, ErrorTwin practice, Explain My Way
+  and PerspectiveLab.
+
+  On another topic without a key, each of those says so rather than serving
+  the wrong subject: diagnosis reports "no confident diagnosis" and names the
+  missing key, unmatched answers get their own *Not classified* group on the
+  confusion map, Explain My Way returns "Not available without a model key",
+  and PerspectiveLab shows an empty state. With a model key configured, all of
+  it works on any topic.
 - Without a model key, translation ships as curated text for Telugu, Hindi,
   Spanish and French; any other language is reported as unavailable rather than
   silently returning English.

@@ -8,6 +8,7 @@ import {
   Card,
   CardBody,
   CardHeader,
+  EmptyState,
   ErrorState,
   LoadingBlock,
   cn,
@@ -71,7 +72,15 @@ export function PerspectiveLab({
         {error ? <ErrorState message={error} onRetry={load} /> : null}
         {loading && !set ? <LoadingBlock label="Gathering perspectives…" /> : null}
 
-        {set ? (
+        {set && set.perspectives.length === 0 ? (
+          <EmptyState
+            icon="🔑"
+            title="No perspectives for this topic yet"
+            description="The built-in personas only speak about this build's sample lesson — accuracy, precision, recall and class imbalance. Add ANTHROPIC_API_KEY or OPENAI_API_KEY to .env.local and they will be generated for any concept."
+          />
+        ) : null}
+
+        {set && set.perspectives.length > 0 ? (
           <>
             <div className="flex flex-wrap gap-2">
               {set.perspectives.map((perspective) => (

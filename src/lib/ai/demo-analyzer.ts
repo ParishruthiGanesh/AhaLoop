@@ -1,6 +1,7 @@
 import {
   CORRECT_GROUP_LABEL,
   CORRECT_SIGNALS,
+  isSampleLessonConcept,
   MISCONCEPTIONS,
   PREREQUISITE_GRAPH,
   type MisconceptionProfile,
@@ -464,6 +465,24 @@ export const DEMO_LANGUAGES = ["English", "Telugu", "Hindi", "Spanish", "French"
 export function buildExplanation(req: ExplanationRequest): Explanation {
   const lang = req.language.trim().toLowerCase();
 
+  // The curated explanations are all about the sample lesson. Handing them to
+  // a student working on something else would be worse than saying nothing.
+  if (!isSampleLessonConcept(req.concept)) {
+    return {
+      style: req.style,
+      language: "English",
+      title: "Not available without a model key",
+      body: [
+        `Explain My Way rewrites a concept into whichever style or language you ask for, but it needs a language model to do that for "${req.concept}".`,
+        "Without one, this build only carries hand-written explanations for its sample lesson: accuracy, precision, recall and class imbalance.",
+        "Set ANTHROPIC_API_KEY or OPENAI_API_KEY in .env.local, restart, and every style and language works on any topic.",
+      ],
+      visual: [],
+      keyTerms: [],
+      generatedBy: "demo",
+    };
+  }
+
   if (lang && lang !== "english" && DEMO_TRANSLATIONS[lang]) {
     return {
       style: req.style,
@@ -608,6 +627,12 @@ const PERSPECTIVES: Perspective[] = [
 ];
 
 export function buildPerspectives(concept: string): PerspectiveSet {
+  // Same rule as explanations: these personas all speak about the sample
+  // lesson, so on any other topic we return nothing rather than the wrong
+  // subject dressed up as an expert.
+  if (!isSampleLessonConcept(concept)) {
+    return { concept, perspectives: [], generatedBy: "demo" };
+  }
   return { concept, perspectives: PERSPECTIVES, generatedBy: "demo" };
 }
 

@@ -180,6 +180,27 @@ export const MISCONCEPTIONS: MisconceptionProfile[] = [
   },
 ];
 
+/**
+ * Does this concept fall inside the one lesson the built-in analyzer knows?
+ * Used to decide whether demo-mode content is genuinely about the student's
+ * topic, or whether we should say we cannot cover it without a model key.
+ */
+export function isSampleLessonConcept(concept: string): boolean {
+  const c = concept.toLowerCase();
+  return [
+    "accuracy",
+    "precision",
+    "recall",
+    "class imbalance",
+    "imbalanced",
+    "confusion matrix",
+    "false negative",
+    "false positive",
+    "classification metric",
+    "f1",
+  ].some((term) => c.includes(term));
+}
+
 /** The one group that is not a misconception. */
 export const CORRECT_GROUP_LABEL = "Correct understanding";
 
