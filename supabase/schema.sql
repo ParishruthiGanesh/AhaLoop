@@ -119,8 +119,32 @@ create table if not exists public.diagnoses (
   created_at     timestamptz not null default now()
 );
 create index if not exists diagnoses_participant_idx on public.diagnoses(participant_id);
-create unique index if not exists diagnoses_response_idx
-  on public.diagnoses(response_id) where response_id is not null;
+
+-- One diagnosis per response. This has to be a plain constraint, not a
+-- partial unique index: the app upserts with ON CONFLICT (response_id), and
+-- Postgres will not use a partial index as a conflict arbiter unless the
+-- statement repeats its WHERE clause, which PostgREST cannot emit. A plain
+-- UNIQUE is equivalent here anyway — Postgres treats NULLs as distinct, so
+-- self-study diagnoses (response_id null) can still have many rows.
+do $$ begin
+  if exists (
+    select 1 from pg_class where relname = 'diagnoses_response_idx'
+      and relkind = 'i'
+      and not exists (
+        select 1 from pg_constraint where conname = 'diagnoses_response_idx'
+      )
+  ) then
+    drop index if exists public.diagnoses_response_idx;
+  end if;
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.diagnoses'::regclass
+      and conname = 'diagnoses_response_key'
+  ) then
+    alter table public.diagnoses
+      add constraint diagnoses_response_key unique (response_id);
+  end if;
+end $$;
 
 create table if not exists public.practice_attempts (
   id                    uuid primary key default gen_random_uuid(),
