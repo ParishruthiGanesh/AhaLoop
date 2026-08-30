@@ -8,6 +8,7 @@ import { Card, CardBody, EmptyState } from "@/components/ui";
 import { Button } from "@/components/ui";
 import { getCurrentUser } from "@/lib/auth";
 import { getModeInfo } from "@/lib/config";
+import { activeQuestion } from "@/lib/live";
 import { getStore } from "@/lib/store";
 
 export const metadata: Metadata = { title: "Live question" };
@@ -63,9 +64,7 @@ export default async function StudentSessionPage({
 
   // If this student already has a diagnosis for their answer, link straight to
   // it rather than re-running the analysis.
-  const published = [...snapshot.questions]
-    .reverse()
-    .find((q) => q.status === "published");
+  const published = activeQuestion(snapshot.questions);
   const myResponse = published
     ? await store.findResponse(published.id, participant.id)
     : null;
