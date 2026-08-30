@@ -149,6 +149,65 @@ Restart the dev server. The badge in the header changes from *Demo mode* to
 
 ---
 
+## Deploying
+
+Demo mode holds its data in the server's memory. That is fine for one local
+process and **wrong for a serverless host**: on Vercel or Netlify each request
+may hit a different instance, so a classroom created on one is invisible to the
+join-code lookup on another. It fails intermittently rather than outright,
+which is the worst way to discover it. A production build without Supabase
+logs a warning at startup saying exactly this.
+
+**So a live deployment needs Supabase.** It takes about fifteen minutes.
+
+### 1. Supabase
+
+1. Create a project at [supabase.com](https://supabase.com).
+2. **SQL Editor** → paste all of `supabase/schema.sql` → **Run**. The file is
+   idempotent, so re-running it is safe.
+3. **Authentication → Providers → Email** → turn *off* "Confirm email", so
+   anyone trying your deployment can sign up without waiting for a link.
+4. **Settings → API** → copy the Project URL and the `anon` public key.
+
+### 2. Vercel
+
+1. Import the GitHub repository and pick this branch.
+2. Add environment variables:
+
+   | Key | Value |
+   |---|---|
+   | `NEXT_PUBLIC_SUPABASE_URL` | from Supabase → Settings → API |
+   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | the `anon` public key |
+   | `ANTHROPIC_API_KEY` | your Claude API key |
+
+3. Deploy. The header badge should read **Connected** rather than *Demo mode*.
+
+Next.js is auto-detected; no build settings to change.
+
+### What changes in connected mode
+
+- Sign-up and sign-in are real Supabase Auth. The passwordless demo identity is
+  disabled, so there is no way around authentication.
+- `/demo` no longer switches who you are. Sign in as a teacher first, and
+  seeding then builds the sample classroom under your own account.
+- Responses arrive over Supabase Realtime as well as polling.
+- Resetting demo data is unavailable — it only ever cleared memory.
+
+### Security notes
+
+The `anon` key is meant to be public; row-level security is what protects the
+data, and `supabase/schema.sql` enables it on every table. The policies were
+verified against a real Postgres: a signed-in user who is neither the teacher
+nor a participant sees zero sessions, zero questions, zero responses and zero
+participants, and cannot submit an answer as somebody else.
+
+Join codes are resolved through a `security definer` function that returns one
+session for one exact code, rather than a readable `sessions` table — otherwise
+any signed-in user could list every classroom and its code and walk into any
+lesson.
+
+---
+
 ## Architecture
 
 ```

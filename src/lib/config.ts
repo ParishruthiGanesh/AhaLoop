@@ -64,3 +64,22 @@ export function getModeInfo(): ModeInfo {
     llmProvider,
   };
 }
+
+/*
+ * Demo mode keeps its data in the server's memory. That is correct for one
+ * local process, and wrong for a serverless deployment, where each request may
+ * land on a different instance: a teacher creates a classroom on one, and the
+ * student's join code resolves against another that has never heard of it.
+ * It fails intermittently rather than outright, which is the worst way to find
+ * out during a demo — so say so loudly in the deployment logs.
+ */
+if (process.env.NODE_ENV === "production" && !isSupabaseConfigured) {
+  console.warn(
+    "\n[thinktrace] WARNING: running a production build without Supabase.\n" +
+      "  Data is held in this process's memory, so on any serverless host\n" +
+      "  (Vercel, Netlify, Cloud Run) sessions and join codes will appear to\n" +
+      "  work and then vanish when a request hits a different instance.\n" +
+      "  Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY, and\n" +
+      "  run supabase/schema.sql. See the README's Deploying section.\n",
+  );
+}

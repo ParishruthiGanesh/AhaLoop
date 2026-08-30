@@ -220,12 +220,15 @@ export class SupabaseStore implements Store {
   }
 
   async getSessionByCode(code: string) {
-    const { data } = await this.db
-      .from("sessions")
-      .select("*")
-      .eq("join_code", code.toUpperCase().trim())
-      .maybeSingle();
-    return data ? toSession(data as SessionRow) : null;
+    // Goes through a security-definer function rather than a table select: the
+    // sessions table is readable only by members, so that a signed-in stranger
+    // cannot enumerate every classroom and its join code.
+    const { data, error } = await this.db.rpc("session_by_code", {
+      p_code: code.toUpperCase().trim(),
+    });
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []) as SessionRow[];
+    return rows.length > 0 ? toSession(rows[0]) : null;
   }
 
   async listSessionsForTeacher(teacherId: string) {

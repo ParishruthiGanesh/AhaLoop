@@ -160,11 +160,26 @@ create index if not exists mastery_session_idx on public.mastery(session_id);
 /* ---------------------------------------------------------------- */
 /* Realtime                                                          */
 /* ---------------------------------------------------------------- */
-alter publication supabase_realtime add table public.responses;
-alter publication supabase_realtime add table public.participants;
-alter publication supabase_realtime add table public.questions;
-alter publication supabase_realtime add table public.confusion_maps;
-alter publication supabase_realtime add table public.mastery;
+-- Adding a table twice is an error, so this whole file stays re-runnable.
+do $$
+declare
+  t text;
+begin
+  foreach t in array array[
+    'responses', 'participants', 'questions', 'confusion_maps', 'mastery'
+  ] loop
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime'
+        and schemaname = 'public'
+        and tablename = t
+    ) then
+      execute format(
+        'alter publication supabase_realtime add table public.%I', t
+      );
+    end if;
+  end loop;
+end $$;
 
 /* ---------------------------------------------------------------- */
 /* Row level security                                                */
@@ -205,11 +220,30 @@ drop policy if exists profiles_self_write on public.profiles;
 create policy profiles_self_write on public.profiles
   for update using (id = auth.uid());
 
--- Sessions are readable by their teacher, their participants, and by anyone
--- resolving a join code (the code itself is the access control).
+-- Resolving a join code has to work before you are a member, but a blanket
+-- "anyone may select sessions" policy would let any signed-in user list every
+-- classroom and its code. So the lookup goes through a security-definer
+-- function that returns exactly one session for an exact code, and the table
+-- itself is readable only by its teacher and its participants.
+create or replace function public.session_by_code(p_code text)
+returns setof public.sessions
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select * from public.sessions
+  where join_code = upper(btrim(p_code))
+    and status <> 'ended'
+  limit 1;
+$$;
+
+revoke all on function public.session_by_code(text) from public;
+grant execute on function public.session_by_code(text) to authenticated;
+
 drop policy if exists sessions_read on public.sessions;
 create policy sessions_read on public.sessions
-  for select using (true);
+  for select using (public.is_session_member(id));
 
 drop policy if exists sessions_teacher_write on public.sessions;
 create policy sessions_teacher_write on public.sessions
