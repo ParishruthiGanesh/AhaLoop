@@ -249,9 +249,17 @@ drop policy if exists sessions_teacher_write on public.sessions;
 create policy sessions_teacher_write on public.sessions
   for all using (teacher_id = auth.uid()) with check (teacher_id = auth.uid());
 
+-- `user_id = auth.uid()` is not redundant with is_session_member: the app
+-- inserts a participant with RETURNING, and the SELECT policy is applied to
+-- the returned row. is_session_member is a stable function reading the same
+-- table, so within that one statement it cannot yet see the row being
+-- inserted and the join fails. A direct column check on the new row does see
+-- it. It is also plainly correct — you can always see your own participation.
 drop policy if exists participants_read on public.participants;
 create policy participants_read on public.participants
-  for select using (public.is_session_member(session_id));
+  for select using (
+    user_id = auth.uid() or public.is_session_member(session_id)
+  );
 
 drop policy if exists participants_join on public.participants;
 create policy participants_join on public.participants
