@@ -18,6 +18,7 @@ import {
   cn,
 } from "../ui";
 import { useLiveSession } from "@/hooks/use-live-session";
+import { activeQuestion } from "@/lib/live";
 import type { LiveSnapshot } from "@/lib/types";
 
 export function AnswerPanel({
@@ -43,9 +44,7 @@ export function AnswerPanel({
   const [formError, setFormError] = useState<string | null>(null);
 
   const question = useMemo(
-    () =>
-      [...live.questions].reverse().find((q) => q.status === "published") ??
-      null,
+    () => activeQuestion(live.questions),
     [live.questions],
   );
 
