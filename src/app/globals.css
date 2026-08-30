@@ -1,0 +1,111 @@
+@import "tailwindcss";
+
+/*
+ * ThinkTrace AI design tokens.
+ * Light, restrained, indigo-led. Built for a teaching dashboard that adults
+ * read for long stretches, not a gamified learning app.
+ */
+@theme {
+  --color-ink-900: oklch(0.21 0.03 265);
+  --color-ink-700: oklch(0.38 0.025 265);
+  --color-ink-500: oklch(0.55 0.02 265);
+  --color-ink-400: oklch(0.66 0.018 265);
+
+  --color-brand-50: oklch(0.97 0.015 275);
+  --color-brand-100: oklch(0.94 0.03 275);
+  --color-brand-200: oklch(0.88 0.06 275);
+  --color-brand-400: oklch(0.68 0.15 274);
+  --color-brand-500: oklch(0.6 0.19 274);
+  --color-brand-600: oklch(0.52 0.21 274);
+  --color-brand-700: oklch(0.45 0.19 274);
+
+  --color-surface: oklch(1 0 0);
+  --color-canvas: oklch(0.985 0.004 265);
+
+  --radius-card: 1rem;
+
+  --animate-rise: rise 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-fade: fade 0.25s ease-out both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background:
+      radial-gradient(
+        ellipse 900px 520px at 12% -8%,
+        color-mix(in oklch, var(--color-brand-100) 55%, transparent),
+        transparent 70%
+      ),
+      radial-gradient(
+        ellipse 760px 460px at 92% 0%,
+        color-mix(in oklch, var(--color-sky-100) 45%, transparent),
+        transparent 68%
+      ),
+      var(--color-canvas);
+    background-attachment: fixed;
+    color: var(--color-ink-900);
+    font-feature-settings: "cv02", "cv03", "cv04";
+    min-height: 100dvh;
+  }
+
+  *:focus-visible {
+    outline: 2px solid var(--color-brand-600);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background: color-mix(in oklch, var(--color-brand-200) 70%, transparent);
+  }
+}
+
+@layer utilities {
+  /* Respect the user's motion preference for every animated element. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* Thin, unobtrusive scrollbars inside scrolling panels. */
+.scroll-slim {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-slate-300) transparent;
+}
+.scroll-slim::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scroll-slim::-webkit-scrollbar-thumb {
+  background: var(--color-slate-300);
+  border-radius: 999px;
+}
