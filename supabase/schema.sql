@@ -307,15 +307,35 @@ drop policy if exists responses_read on public.responses;
 create policy responses_read on public.responses
   for select using (public.is_session_member(session_id));
 
+-- A student writes their own answers. A teacher may also write answers for
+-- *unclaimed* participants in their own session — that is what seeding the
+-- demonstration classroom does. `user_id is null` is the load-bearing part:
+-- once a real person is attached to a participant, only they can answer, so
+-- a teacher can never forge a real student's response.
+create or replace function public.can_write_for_participant(target uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1 from public.participants p
+    where p.id = target and p.user_id = auth.uid()
+  ) or exists (
+    select 1
+    from public.participants p
+    join public.sessions s on s.id = p.session_id
+    where p.id = target
+      and p.user_id is null
+      and s.teacher_id = auth.uid()
+  );
+$$;
+
 drop policy if exists responses_write on public.responses;
 create policy responses_write on public.responses
-  for all using (
-    exists (select 1 from public.participants p
-            where p.id = participant_id and p.user_id = auth.uid())
-  ) with check (
-    exists (select 1 from public.participants p
-            where p.id = participant_id and p.user_id = auth.uid())
-  );
+  for all using (public.can_write_for_participant(participant_id))
+  with check (public.can_write_for_participant(participant_id));
 
 drop policy if exists confusion_read on public.confusion_maps;
 create policy confusion_read on public.confusion_maps
@@ -373,10 +393,5 @@ create policy mastery_read on public.mastery
 
 drop policy if exists mastery_write on public.mastery;
 create policy mastery_write on public.mastery
-  for all using (
-    exists (select 1 from public.participants p
-            where p.id = participant_id and p.user_id = auth.uid())
-  ) with check (
-    exists (select 1 from public.participants p
-            where p.id = participant_id and p.user_id = auth.uid())
-  );
+  for all using (public.can_write_for_participant(participant_id))
+  with check (public.can_write_for_participant(participant_id));
